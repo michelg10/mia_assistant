@@ -33,9 +33,9 @@ protocol AssistantMainObject {
     /// - Parameter thread: The array of `ChatThreadItem` representing the chat thread.
     func setChatThread(_ thread: [ChatThreadItem])
     
-    /// Appends a chunk of text to the chat thread.
+    /// Reports that there is a new chunk of text
     /// - Parameter text: The text chunk to be appended.
-    func appendTextChunk(_ text: String)
+    func newTextChunk(_ text: String)
     
     /// Updates the progress of an action identified by `id` with the specified `tokenCount`.
     /// - Parameters:

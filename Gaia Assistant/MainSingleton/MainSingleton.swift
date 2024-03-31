@@ -6,23 +6,33 @@ class MainSingleton: VoiceCommandProcessorMainObject, AssistantMainObject {
         self.chatThread = thread
     }
     
-    func appendTextChunk(_ text: String) {
-        guard let lastMessage = self.chatThread.last else {
-            return
+    private var textToSpeechBufferedText = ""
+    private var textToSpeech: TextToSpeech?
+    
+    private func speakText(_ text: String) async {
+        await textToSpeech!.speakText(text, waitUntilOutput: false)
+    }
+    
+    private func textToSpeechReset() {
+        self.textToSpeech!.stop()
+        self.textToSpeechBufferedText = ""
+    }
+    
+    func newTextChunk(_ text: String) {
+        textToSpeechBufferedText.append(text)
+        if textToSpeechBufferedText.contains(".") {
+            let sentenceEnd = textToSpeechBufferedText.lastIndex(of: ".")!
+            let textToSpeechSpeak = String(self.textToSpeechBufferedText[...sentenceEnd])
+            Task.detached {
+                await self.speakText(textToSpeechSpeak)
+            }
+            let newBuffer = String(self.textToSpeechBufferedText[self.textToSpeechBufferedText.index(after: sentenceEnd)...])
+            if newBuffer.first?.isWhitespace == true {
+                self.textToSpeechBufferedText = String(newBuffer.dropFirst())
+            } else {
+                self.textToSpeechBufferedText = newBuffer
+            }
         }
-        
-        var lastMessageText = ""
-        var lastMessageSender: ChatThreadItem.Sender = .assistant
-        switch lastMessage {
-        case .text(let sender, let text):
-            lastMessageText = text.text
-            lastMessageSender = sender
-        case .action(let action):
-            lastMessageText = ""
-        }
-        
-        self.chatThread.popLast()
-        self.chatThread.append(.text(lastMessageSender, .init(text: lastMessageText + text)))
     }
     
     func updateActionProgress(id: String, tokenCount: Int) {
@@ -56,6 +66,11 @@ class MainSingleton: VoiceCommandProcessorMainObject, AssistantMainObject {
     
     func initialize() {
         Task.detached {
+            if self.textToSpeech == nil {
+                self.textToSpeech = OpenAITextToSpeech()
+                self.textToSpeech!.prepare()
+            }
+            
             if self.voiceCommandProcessor == nil {
                 self.voiceCommandProcessor = OpenAIVoiceCommandProcessor()
                 self.voiceCommandProcessor?.registerMainObject(self)
@@ -81,6 +96,7 @@ class MainSingleton: VoiceCommandProcessorMainObject, AssistantMainObject {
     
     func newConversation() {
         Task.detached {
+            self.textToSpeechReset()
             await self.assistant!.prepareForNewConversation()
         }
     }
@@ -99,6 +115,7 @@ class MainSingleton: VoiceCommandProcessorMainObject, AssistantMainObject {
             case .TextChunk(let chunkData):
                 currentCommand += chunkData
             case .EndCommand:
+                self.textToSpeechReset()
                 self.chatThread.append(.text(.user, .init(text: currentCommand)))
                 await self.assistant!.handleUserQuery(message: currentCommand)
                 currentCommand = ""
@@ -107,6 +124,7 @@ class MainSingleton: VoiceCommandProcessorMainObject, AssistantMainObject {
     }
     
     func resetAssistant() {
+        self.textToSpeechReset()
         self.assistant!.reset()
     }
 }

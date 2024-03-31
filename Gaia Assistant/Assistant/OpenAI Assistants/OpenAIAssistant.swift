@@ -190,6 +190,7 @@ class OpenAIAssistant: Assistant {
                             deltaText = innerText.text.value
                         }
                         self.chatThread[self.chatThread.count - 1] = .text(.assistant, .init(text: currentText + deltaText))
+                        self.mainObject?.newTextChunk(deltaText)
                         self.pushThreadToMain()
                     case .threadMessageCreated:
                         self.chatThread.append(.text(.assistant, .init(text: "")))
